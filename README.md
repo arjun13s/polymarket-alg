@@ -1,38 +1,8 @@
 # Polymarket AI System
 
-Bare-bones but production-minded scaffold for an AI-assisted Polymarket research and paper-trading system. The emphasis is backend architecture, typed interfaces, observability, modularity, and future extensibility rather than UI polish.
 
 This version is scaffolded to be HUD-first at the provider layer while keeping the internal contracts generic enough to swap inference providers later.
 
-## Proposed Project Structure
-
-```text
-polymarket_ai_system/
-├── configs/
-├── docs/
-├── examples/
-├── scripts/
-├── src/polymarket_ai/
-│   ├── hud/
-│   ├── reliability/
-│   ├── repositories/
-│   ├── services/
-│   ├── agent/
-│   ├── evaluation/
-│   ├── execution/
-│   ├── infra/
-│   ├── market_data/
-│   ├── portfolio/
-│   ├── pricing/
-│   ├── ranking/
-│   ├── research/
-│   ├── storage/
-│   ├── models.py
-│   ├── bootstrap.py
-│   ├── cli.py
-│   └── example_data.py
-└── tests/
-```
 
 ## Short Architecture Explanation
 
