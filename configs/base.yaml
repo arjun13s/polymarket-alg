@@ -1,0 +1,21 @@
+system:
+  paper_mode: true
+  polling_interval_seconds: 300
+  provider: hud
+
+market_data:
+  min_liquidity: 1000.0
+  min_volume: 1000.0
+
+pricing:
+  min_edge: 0.03
+  max_uncertainty_width: 0.20
+
+ranking:
+  freshness_half_life_hours: 24
+  minimum_rank_score: 0.20
+
+portfolio:
+  bankroll: 10000
+  max_exposure_per_market: 0.02
+  max_exposure_per_theme: 0.10
