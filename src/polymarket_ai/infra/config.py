@@ -47,6 +47,14 @@ class FileConfig(BaseModel):
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
 
 
+class AgentRoute(BaseModel):
+    role: str
+    model: str
+    max_retries: int
+    timeout_seconds: int
+    allowed_tools: list[str] = Field(default_factory=list)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="POLYMARKET_AI_",
@@ -69,6 +77,9 @@ class Settings(BaseSettings):
     tool_timeout_seconds: int = 30
     tool_max_retries: int = 2
     cache_ttl_seconds: int = 3600
+    allow_heuristic_fallback: bool = True
+    fail_closed_on_provider_error: bool = True
+    hud_environment_name: str = "prediction_market_env"
     openai_base_url: str | None = None
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4"
@@ -90,3 +101,42 @@ class Settings(BaseSettings):
             raw_path = self.db_url.replace("sqlite:///", "", 1)
             return f"sqlite:///{resolve_project_path(raw_path)}"
         return self.db_url
+
+    def model_routes(self) -> dict[str, AgentRoute]:
+        return {
+            "orchestrator": AgentRoute(
+                role="orchestrator",
+                model=self.orchestrator_model,
+                max_retries=self.tool_max_retries,
+                timeout_seconds=self.tool_timeout_seconds,
+                allowed_tools=["rules_agent", "research_agent", "skeptic_agent", "probability_agent"],
+            ),
+            "rules": AgentRoute(
+                role="rules",
+                model=self.rules_model,
+                max_retries=self.tool_max_retries,
+                timeout_seconds=self.tool_timeout_seconds,
+                allowed_tools=["parse_rules"],
+            ),
+            "research": AgentRoute(
+                role="research",
+                model=self.research_model,
+                max_retries=self.tool_max_retries,
+                timeout_seconds=self.tool_timeout_seconds,
+                allowed_tools=["search_web", "fetch_source"],
+            ),
+            "skeptic": AgentRoute(
+                role="skeptic",
+                model=self.skeptic_model,
+                max_retries=self.tool_max_retries,
+                timeout_seconds=self.tool_timeout_seconds,
+                allowed_tools=[],
+            ),
+            "probability": AgentRoute(
+                role="probability",
+                model=self.probability_model,
+                max_retries=self.tool_max_retries,
+                timeout_seconds=self.tool_timeout_seconds,
+                allowed_tools=["compute_ev"],
+            ),
+        }

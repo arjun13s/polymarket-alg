@@ -1,8 +1,6 @@
 # Polymarket AI System
 
-
 This version is scaffolded to be HUD-first at the provider layer while keeping the internal contracts generic enough to swap inference providers later.
-
 
 ## Short Architecture Explanation
 

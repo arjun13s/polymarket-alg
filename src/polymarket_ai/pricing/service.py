@@ -38,7 +38,7 @@ class PricingService:
         if outcome is None:
             raise ValueError(f"Unknown outcome_id {outcome_id!r} for market {market.market_id}")
         market_probability = self.implied_probability(outcome.price)
-        executable_price = self.implied_probability(market.best_ask or outcome.price)
+        executable_price = self.implied_probability(max(market.best_ask or 0.0, outcome.price))
         assessment = self._provider.estimate_probability(research, outcome_id=outcome_id)
         fair_probability, lower, upper, rationale = (
             assessment.fair_probability,

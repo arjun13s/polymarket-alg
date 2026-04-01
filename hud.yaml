@@ -1,0 +1,12 @@
+name: polymarket-ai-system
+controller:
+  entrypoint: controller
+  attr: mcp
+environment:
+  entrypoint: environment.server
+  attr: app
+tasks:
+  path: tasks.json
+metadata:
+  mode: paper_research_only
+  description: HUD deployment surface for the Polymarket AI paper-trading and research system.

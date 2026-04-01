@@ -16,6 +16,9 @@ dependencies = [
   "SQLAlchemy>=2.0.29",
   "typer>=0.12.3",
   "rich>=13.7.1",
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0",
+  "fastmcp[tasks]>=3.2.0",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +39,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 
 [tool.ruff]

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "example-paper-market",
+    "scenario": "full_pipeline_scenario",
+    "input": {
+      "market_id": "atlantic_hurricanes_over_15_2026",
+      "expected_decision": "WATCHLIST",
+      "expected_edge_sign": "positive"
+    }
+  },
+  {
+    "name": "unknown-market-fails-closed",
+    "scenario": "full_pipeline_scenario",
+    "input": {
+      "market_id": "missing_market_id",
+      "expected_decision": "NO_TRADE",
+      "expected_edge_sign": "negative"
+    }
+  }
+]

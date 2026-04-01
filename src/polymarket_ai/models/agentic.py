@@ -4,6 +4,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from polymarket_ai.hud.models import (
+    ProbabilityOutput as HUDProbabilityOutput,
+    ResearchOutput as HUDResearchOutput,
+    RuleAnalysis as HUDRuleAnalysis,
+    SkepticOutput as HUDSkepticOutput,
+)
 from polymarket_ai.models.domain import Market, ProbabilityEstimate, ResearchReport, TradeDecision
 
 
@@ -25,7 +31,7 @@ class AgentTrace(BaseModel):
     trace_id: str
     agent_name: str
     instructions: str
-    model_config: AgentModelConfig
+    model_settings: AgentModelConfig
     reasoning_steps: list[str]
     tool_calls: list[ToolCallRecord]
     started_at: datetime
@@ -50,7 +56,7 @@ class ResearchAgentInput(BaseModel):
     trace_id: str
     market: Market
     outcome_id: str
-    rules_output: RulesAgentOutput
+    rules_output: RulesAgentOutput | HUDRuleAnalysis
 
 
 class ResearchAgentOutput(BaseModel):
@@ -61,8 +67,8 @@ class ResearchAgentOutput(BaseModel):
 class SkepticAgentInput(BaseModel):
     trace_id: str
     market: Market
-    research_output: ResearchAgentOutput
-    rules_output: RulesAgentOutput
+    research_output: ResearchAgentOutput | HUDResearchOutput
+    rules_output: RulesAgentOutput | HUDRuleAnalysis
 
 
 class SkepticAgentOutput(BaseModel):
@@ -76,9 +82,9 @@ class ProbabilityAgentInput(BaseModel):
     trace_id: str
     market: Market
     outcome_id: str
-    rules_output: RulesAgentOutput
-    research_output: ResearchAgentOutput
-    skeptic_output: SkepticAgentOutput
+    rules_output: RulesAgentOutput | HUDRuleAnalysis
+    research_output: ResearchAgentOutput | HUDResearchOutput
+    skeptic_output: SkepticAgentOutput | HUDSkepticOutput
 
 
 class ProbabilityAgentOutput(BaseModel):
@@ -99,4 +105,3 @@ class OrchestratorDecisionEnvelope(BaseModel):
     probability: ProbabilityAgentOutput
     probability_estimate: ProbabilityEstimate
     decision: TradeDecision
-

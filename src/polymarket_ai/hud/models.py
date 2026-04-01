@@ -89,3 +89,4 @@ class ScenarioResult(BaseModel):
     output: dict[str, object]
     score: float = Field(ge=0.0, le=1.0)
     notes: list[str]
+    component_scores: dict[str, float] = Field(default_factory=dict)

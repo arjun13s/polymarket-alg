@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from polymarket_ai.hud.config import HUDSettings
-from polymarket_ai.infra.paths import resolve_project_path
+from polymarket_ai.example_data import build_example_market
+from polymarket_ai.infra.config import Settings
+from polymarket_ai.infra.logging import configure_logging
 from polymarket_ai.models import Market
+from polymarket_ai.repositories import models as _repository_models  # noqa: F401
 from polymarket_ai.repositories.market_repo import MarketRepository
 from polymarket_ai.repositories.research_repo import ResearchRepository
 from polymarket_ai.repositories.trade_repo import RunRepository, TradeRepository
@@ -14,36 +16,46 @@ from polymarket_ai.services.pricing_service import PricingService
 from polymarket_ai.services.ranking_service import RankingService
 from polymarket_ai.services.research_service import ResearchService
 from polymarket_ai.storage.db import Database
-from polymarket_ai.repositories import models as _repository_models  # noqa: F401
 
 
 @dataclass(slots=True)
 class HUDRuntime:
-    settings: HUDSettings = field(default_factory=HUDSettings)
-    db: Database | None = None
-    market_repo: MarketRepository | None = None
-    research_repo: ResearchRepository | None = None
-    run_repo: RunRepository | None = None
-    trade_repo: TradeRepository | None = None
-    market_service: MarketService | None = None
-    research_service: ResearchService | None = None
-    pricing_service: PricingService | None = None
-    ranking_service: RankingService | None = None
+    settings: Settings
+    db: Database
+    market_repo: MarketRepository
+    research_repo: ResearchRepository
+    run_repo: RunRepository
+    trade_repo: TradeRepository
+    market_service: MarketService
+    research_service: ResearchService
+    pricing_service: PricingService
+    ranking_service: RankingService
 
 
-def build_hud_runtime(settings: HUDSettings | None = None) -> HUDRuntime:
-    resolved_settings = settings or HUDSettings()
-    db_path = resolve_project_path("data/hud_runtime.db")
-    db = Database(f"sqlite:///{db_path}")
+def build_hud_runtime(settings: Settings | None = None) -> HUDRuntime:
+    resolved_settings = settings or Settings()
+    configure_logging(resolved_settings.log_level)
+    db = Database(resolved_settings.resolved_db_url())
     db.create_all()
     market_repo = MarketRepository(db)
     research_repo = ResearchRepository(db)
     run_repo = RunRepository(db)
     trade_repo = TradeRepository(db)
-    market_service = MarketService(market_repo=market_repo, cache=TimedCache[Market](ttl_seconds=resolved_settings.market_cache_ttl_seconds))
-    research_service = ResearchService(market_service=market_service, research_repo=research_repo)
+    market_service = MarketService(
+        market_repo=market_repo,
+        cache=TimedCache[Market](ttl_seconds=resolved_settings.cache_ttl_seconds),
+    )
+    research_service = ResearchService(
+        market_service=market_service,
+        research_repo=research_repo,
+    )
     pricing_service = PricingService()
     ranking_service = RankingService()
+
+    example_market = Market.model_validate(build_example_market().model_dump(mode="json"))
+    if market_repo.get(example_market.market_id) is None:
+        market_service.save_market(example_market)
+
     return HUDRuntime(
         settings=resolved_settings,
         db=db,
@@ -56,6 +68,3 @@ def build_hud_runtime(settings: HUDSettings | None = None) -> HUDRuntime:
         pricing_service=pricing_service,
         ranking_service=ranking_service,
     )
-
-
-RUNTIME = build_hud_runtime()

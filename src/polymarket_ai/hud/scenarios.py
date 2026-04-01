@@ -1,202 +1,234 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from polymarket_ai.hud.agents import ProbabilityAgent, ResearchAgent, RulesAgent, SkepticAgent, final_decision
-from polymarket_ai.hud.config import ModelRoute
-from polymarket_ai.hud.environment import prediction_market_env
+from polymarket_ai.hud.environment import ScenarioSpec
 from polymarket_ai.hud.models import DecisionKind, ScenarioResult
-from polymarket_ai.hud.tools import compute_ev, get_market_data, new_run_id, parse_rules, save_run, search_web
+from polymarket_ai.hud.orchestrator import PredictionMarketOrchestrator
+from polymarket_ai.hud.runtime import HUDRuntime
+from polymarket_ai.hud.tools import compute_expected_value
+from polymarket_ai.infra.config import Settings
 from polymarket_ai.models import ProbabilityAgentInput, ResearchAgentInput, RulesAgentInput, SkepticAgentInput
 
 
-rules_agent = RulesAgent(
-    name="RulesAgent",
-    instructions="Parse resolution rules into explicit, testable criteria.",
-    route=ModelRoute(tier="cheap", model="hud-lite", purpose="rules parsing"),
-    tools=("parse_rules",),
-)
-research_agent = ResearchAgent(
-    name="ResearchAgent",
-    instructions="Collect supporting and opposing evidence with citations.",
-    route=ModelRoute(tier="mid", model="hud-balanced", purpose="research synthesis"),
-    tools=("search_web", "fetch_source"),
-)
-skeptic_agent = SkepticAgent(
-    name="SkepticAgent",
-    instructions="Challenge the thesis and surface failure modes.",
-    route=ModelRoute(tier="mid", model="hud-balanced", purpose="bear case analysis"),
-)
-probability_agent = ProbabilityAgent(
-    name="ProbabilityAgent",
-    instructions="Estimate fair probability and determine tradeability.",
-    route=ModelRoute(tier="high", model="hud-pro", purpose="probability synthesis"),
-)
+def register_scenarios(
+    env: object,
+    runtime: HUDRuntime,
+    orchestrator: PredictionMarketOrchestrator,
+    settings: Settings,
+) -> None:
+    registry = getattr(env, "scenarios", None)
+    if not isinstance(registry, dict):
+        registry = {}
+        try:
+            setattr(env, "scenarios", registry)
+        except Exception:
+            setattr(env, "_polymarket_scenarios", registry)
 
-
-@prediction_market_env.scenario(name="research_scenario", description="Research agent boundary and evidence gathering.")
-def research_scenario(market_id: str) -> ScenarioResult:
-    market = get_market_data(market_id)
-    sources = search_web(market.question)
-    rules = rules_agent.run(RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes"))
-    report = research_agent.run(
-        ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
-    )
-    score = min(1.0, 0.3 + 0.2 * len(sources) + 0.4 * report.confidence)
-    return ScenarioResult(
+    @env.scenario(  # type: ignore[attr-defined]
         name="research_scenario",
-        output={"market_id": market.market_id, "sources": sources, "report": report.model_dump(mode="json")},
-        score=score,
-        notes=["Validated research boundary", "Output is structured and citation-oriented"],
+        description="Research agent boundary and evidence gathering.",
+    )
+    def research_scenario(market_id: str) -> ScenarioResult:
+        market = runtime.market_service.get_market_data(market_id)
+        rules = orchestrator.agents.rules.run(
+            RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes")
+        )
+        report = orchestrator.agents.research.run(
+            ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
+        )
+        score = _weighted_score(
+            decision_quality=min(1.0, report.confidence + 0.2),
+            calibration=report.confidence,
+            ev_realism=1.0 if report.sources else 0.0,
+        )
+        return ScenarioResult(
+            name="research_scenario",
+            output={"market_id": market.market_id, "report": report.model_dump(mode="json")},
+            score=score,
+            notes=["Validated research boundary", "Output is structured and citation-oriented"],
+            component_scores={
+                "decision_quality": min(1.0, report.confidence + 0.2),
+                "calibration": report.confidence,
+                "ev_realism": 1.0 if report.sources else 0.0,
+            },
+        )
+    registry["research_scenario"] = ScenarioSpec(
+        name="research_scenario",
+        description="Research agent boundary and evidence gathering.",
+        handler=research_scenario,
     )
 
-
-@prediction_market_env.scenario(name="rules_scenario", description="Rules agent boundary and rule parsing quality.")
-def rules_scenario(market_id: str) -> ScenarioResult:
-    market = get_market_data(market_id)
-    parsed = parse_rules(market.rules.raw_rules)
-    score = parsed.clarity_score
-    return ScenarioResult(
+    @env.scenario(name="rules_scenario", description="Rules agent boundary and rule parsing quality.")  # type: ignore[attr-defined]
+    def rules_scenario(market_id: str) -> ScenarioResult:
+        market = runtime.market_service.get_market_data(market_id)
+        rules = orchestrator.agents.rules.run(
+            RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes")
+        )
+        score = _weighted_score(
+            decision_quality=rules.clarity_score,
+            calibration=rules.clarity_score,
+            ev_realism=1.0 if not rules.risks else 0.6,
+        )
+        return ScenarioResult(
+            name="rules_scenario",
+            output={"market_id": market.market_id, "rules": rules.model_dump(mode="json")},
+            score=score,
+            notes=["Rules parsing is explicit", "Low ambiguity receives lower score"],
+            component_scores={
+                "decision_quality": rules.clarity_score,
+                "calibration": rules.clarity_score,
+                "ev_realism": 1.0 if not rules.risks else 0.6,
+            },
+        )
+    registry["rules_scenario"] = ScenarioSpec(
         name="rules_scenario",
-        output={"market_id": market.market_id, "rules": parsed.model_dump(mode="json")},
-        score=score,
-        notes=["Rules parsing is explicit", "Low ambiguity receives lower score"],
+        description="Rules agent boundary and rule parsing quality.",
+        handler=rules_scenario,
     )
 
-
-@prediction_market_env.scenario(name="skeptic_scenario", description="Skeptic agent boundary and counter-argument quality.")
-def skeptic_scenario(market_id: str) -> ScenarioResult:
-    market = get_market_data(market_id)
-    rules = rules_agent.run(RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes"))
-    research = research_agent.run(
-        ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
-    )
-    skeptic = skeptic_agent.run(
-        SkepticAgentInput(
-            trace_id=market_id,
-            market=market,
-            research_output=research,
-            rules_output=rules,
+    @env.scenario(name="skeptic_scenario", description="Skeptic agent boundary and counter-argument quality.")  # type: ignore[attr-defined]
+    def skeptic_scenario(market_id: str) -> ScenarioResult:
+        market = runtime.market_service.get_market_data(market_id)
+        rules = orchestrator.agents.rules.run(
+            RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes")
         )
-    )
-    score = max(0.0, 1.0 - skeptic.confidence_penalty)
-    return ScenarioResult(
+        research = orchestrator.agents.research.run(
+            ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
+        )
+        skeptic = orchestrator.agents.skeptic.run(
+            SkepticAgentInput(
+                trace_id=market_id,
+                market=market,
+                research_output=research,
+                rules_output=rules,
+            )
+        )
+        score = _weighted_score(
+            decision_quality=max(0.0, 1.0 - skeptic.confidence_penalty),
+            calibration=max(0.0, 1.0 - skeptic.confidence_penalty),
+            ev_realism=1.0 if skeptic.failure_modes else 0.0,
+        )
+        return ScenarioResult(
+            name="skeptic_scenario",
+            output={"market_id": market.market_id, "skeptic": skeptic.model_dump(mode="json")},
+            score=score,
+            notes=["Bear case is explicit", "Failure modes are surfaced before probability scoring"],
+            component_scores={
+                "decision_quality": max(0.0, 1.0 - skeptic.confidence_penalty),
+                "calibration": max(0.0, 1.0 - skeptic.confidence_penalty),
+                "ev_realism": 1.0 if skeptic.failure_modes else 0.0,
+            },
+        )
+    registry["skeptic_scenario"] = ScenarioSpec(
         name="skeptic_scenario",
-        output={"market_id": market.market_id, "skeptic": skeptic.model_dump(mode="json")},
-        score=score,
-        notes=["Bear case is explicit", "Failure modes are surfaced before probability scoring"],
+        description="Skeptic agent boundary and counter-argument quality.",
+        handler=skeptic_scenario,
     )
 
-
-@prediction_market_env.scenario(name="probability_scenario", description="Probability agent boundary and EV computation.")
-def probability_scenario(market_id: str) -> ScenarioResult:
-    market = get_market_data(market_id)
-    rules = rules_agent.run(RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes"))
-    research = research_agent.run(
-        ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
-    )
-    skeptic = skeptic_agent.run(
-        SkepticAgentInput(
-            trace_id=market_id,
-            market=market,
-            research_output=research,
-            rules_output=rules,
+    @env.scenario(name="probability_scenario", description="Probability agent boundary and EV computation.")  # type: ignore[attr-defined]
+    def probability_scenario(market_id: str) -> ScenarioResult:
+        market = runtime.market_service.get_market_data(market_id)
+        rules = orchestrator.agents.rules.run(
+            RulesAgentInput(trace_id=market_id, market=market, outcome_id="yes")
         )
-    )
-    probability = probability_agent.run(
-        ProbabilityAgentInput(
-            trace_id=market_id,
-            market=market,
-            outcome_id="yes",
-            rules_output=rules,
-            research_output=research,
-            skeptic_output=skeptic,
+        research = orchestrator.agents.research.run(
+            ResearchAgentInput(trace_id=market_id, market=market, outcome_id="yes", rules_output=rules)
         )
-    )
-    ev = compute_ev(probability.market_prob, probability.fair_prob, 150, 50)
-    score = max(0.0, min(1.0, probability.confidence + (1.0 if ev["expected_value"] > 0 else 0.0) / 2))
-    return ScenarioResult(
-        name="probability_scenario",
-        output={
-            "market_id": market.market_id,
-            "probability": probability.model_dump(mode="json"),
-            "ev": ev,
-        },
-        score=score,
-        notes=["Probability estimate is structured", "EV is computed in pure Python"],
-    )
-
-
-@prediction_market_env.scenario(name="full_pipeline_scenario", description="Full hierarchical agent pipeline.")
-def full_pipeline_scenario(market_id: str) -> ScenarioResult:
-    started_at = datetime.now(tz=timezone.utc)
-    run_id = new_run_id()
-    market = get_market_data(market_id)
-    rules = rules_agent.run(RulesAgentInput(trace_id=run_id, market=market, outcome_id="yes"))
-    research = research_agent.run(
-        ResearchAgentInput(trace_id=run_id, market=market, outcome_id="yes", rules_output=rules)
-    )
-    skeptic = skeptic_agent.run(
-        SkepticAgentInput(
-            trace_id=run_id,
-            market=market,
-            research_output=research,
-            rules_output=rules,
+        skeptic = orchestrator.agents.skeptic.run(
+            SkepticAgentInput(
+                trace_id=market_id,
+                market=market,
+                research_output=research,
+                rules_output=rules,
+            )
         )
-    )
-    probability = probability_agent.run(
-        ProbabilityAgentInput(
-            trace_id=run_id,
-            market=market,
-            outcome_id="yes",
-            rules_output=rules,
-            research_output=research,
-            skeptic_output=skeptic,
+        probability = orchestrator.agents.probability.run(
+            ProbabilityAgentInput(
+                trace_id=market_id,
+                market=market,
+                outcome_id="yes",
+                rules_output=rules,
+                research_output=research,
+                skeptic_output=skeptic,
+            )
         )
-    )
-    ev = compute_ev(probability.market_prob, probability.fair_prob, 150, 50)
-    final_kind = probability.decision
-    if probability.confidence < 0.65 or ev["edge"] < 0.05:
-        final_kind = DecisionKind.NO_TRADE
-    elif probability.confidence < 0.75:
-        final_kind = DecisionKind.WATCHLIST
-    decision = final_decision(
-        run_id=run_id,
-        trace_id=run_id,
-        estimate=probability.model_copy(update={"decision": final_kind, "expected_value": ev["expected_value"]}),
-    ).model_copy(
-        update={
-            "agent_outputs": {
-                "rules": rules.model_dump(mode="json"),
-                "research": research.model_dump(mode="json"),
-                "skeptic": skeptic.model_dump(mode="json"),
+        ev = compute_expected_value(
+            probability.market_prob,
+            probability.fair_prob,
+            settings.default_fee_bps,
+            settings.default_slippage_bps,
+        )
+        component_scores = {
+            "decision_quality": 1.0 if probability.reasoning_summary else 0.0,
+            "calibration": max(0.0, 1.0 - abs(probability.fair_prob - probability.market_prob)),
+            "ev_realism": 1.0 if ev["expected_value"] > 0 else 0.2,
+        }
+        return ScenarioResult(
+            name="probability_scenario",
+            output={
+                "market_id": market.market_id,
                 "probability": probability.model_dump(mode="json"),
-            }
-        }
+                "ev": ev,
+            },
+            score=_weighted_score(**component_scores),
+            notes=["Probability estimate is structured", "EV is computed in pure Python"],
+            component_scores=component_scores,
+        )
+    registry["probability_scenario"] = ScenarioSpec(
+        name="probability_scenario",
+        description="Probability agent boundary and EV computation.",
+        handler=probability_scenario,
     )
-    saved = save_run(
-        {
-            "run_id": run_id,
-            "trace_id": run_id,
-            "market_id": market.market_id,
-            "final_decision": decision.model_dump(mode="json"),
-            "started_at": started_at.isoformat(),
-            "finished_at": datetime.now(tz=timezone.utc).isoformat(),
+
+    @env.scenario(name="full_pipeline_scenario", description="Full hierarchical agent pipeline.")  # type: ignore[attr-defined]
+    def full_pipeline_scenario(
+        market_id: str,
+        expected_decision: str | None = None,
+        expected_edge_sign: str | None = None,
+    ) -> ScenarioResult:
+        final = orchestrator.analyze_market(market_id, outcome_id="yes")
+        component_scores = {
+            "decision_quality": _decision_quality(final.decision, expected_decision),
+            "calibration": max(0.0, 1.0 - abs(final.fair_prob - final.market_prob)),
+            "ev_realism": _ev_realism(final.edge, expected_edge_sign, final.decision),
         }
-    )
-    score = max(0.0, min(1.0, decision.confidence + (1.0 if decision.decision != "NO_TRADE" else 0.0) / 2))
-    return ScenarioResult(
+        return ScenarioResult(
+            name="full_pipeline_scenario",
+            output={"market_id": market_id, "decision": final.model_dump(mode="json")},
+            score=_weighted_score(**component_scores),
+            notes=[
+                "Orchestrator delegates to narrow subagents",
+                "Structured outputs survive the entire path",
+            ],
+            component_scores=component_scores,
+        )
+    registry["full_pipeline_scenario"] = ScenarioSpec(
         name="full_pipeline_scenario",
-        output={
-            "run_id": run_id,
-            "market_id": market.market_id,
-            "rules": rules.model_dump(mode="json"),
-            "research": research.model_dump(mode="json"),
-            "skeptic": skeptic.model_dump(mode="json"),
-            "probability": probability.model_dump(mode="json"),
-            "decision": decision.model_dump(mode="json"),
-            "saved_run": saved,
-        },
-        score=score,
-        notes=["Orchestrator delegates to narrow subagents", "Structured outputs survive the entire path"],
+        description="Full hierarchical agent pipeline.",
+        handler=full_pipeline_scenario,
     )
+
+
+def _weighted_score(decision_quality: float, calibration: float, ev_realism: float) -> float:
+    return max(
+        0.0,
+        min(
+            1.0,
+            (decision_quality * 0.45) + (calibration * 0.35) + (ev_realism * 0.20),
+        ),
+    )
+
+
+def _decision_quality(actual: DecisionKind, expected_decision: str | None) -> float:
+    if expected_decision is None:
+        return 1.0 if actual in {DecisionKind.NO_TRADE, DecisionKind.WATCHLIST, DecisionKind.PAPER_TRADE} else 0.0
+    return 1.0 if actual.value == expected_decision else 0.0
+
+
+def _ev_realism(edge: float, expected_edge_sign: str | None, decision: DecisionKind) -> float:
+    if expected_edge_sign == "positive":
+        return 1.0 if edge > 0 else 0.0
+    if expected_edge_sign == "negative":
+        return 1.0 if edge <= 0 else 0.0
+    if decision == DecisionKind.PAPER_TRADE:
+        return 1.0 if edge > 0 else 0.0
+    return 0.8 if edge <= 0 else 0.6
