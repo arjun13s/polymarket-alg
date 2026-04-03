@@ -80,22 +80,30 @@ class ResearchAgent(AgentTool[ResearchAgentInput, ResearchOutput]):
         market = payload.market
         rules = payload.rules_output
         sources = [
-            "https://www.noaa.gov/",
-            "https://example.org/historical-baseline",
+            market.rules.source_url.unicode_string() if market.rules.source_url else "https://gamma-api.polymarket.com",
+            "https://data-api.polymarket.com/trades",
         ]
         supporting_points = [
+            f"Market liquidity is {market.liquidity:.2f} with 24h volume {market.volume_24h:.2f} in category {market.category}.",
+            f"Recent Data API flow shows {market.recent_trade_count} trades and {market.recent_trade_volume:.2f} units of matched activity.",
             f"Rules are explicit enough to support a testable thesis in {market.market_id}.",
-            "Public, official data sources exist and can be cited directly.",
         ]
         opposing_points = [
             "The same public evidence may already be priced into the market.",
             "A narrow resolution interpretation could invalidate the thesis.",
         ]
-        risks = list(rules.risks) + ["Evidence quality remains sensitive to source freshness."]
+        if market.last_activity_at is not None:
+            supporting_points.append(
+                f"Latest market activity timestamp from Data API: {market.last_activity_at.isoformat()}."
+            )
+        risks = list(rules.risks) + [
+            "Evidence quality remains sensitive to source freshness.",
+            f"Gamma/Data market snapshot may still lag if cache TTL is long; spread={market.spread}.",
+        ]
         confidence = 0.72 if rules.clarity_score >= 0.5 else 0.45
         return ResearchOutput(
             market_id=market.market_id,
-            summary="Collected support and opposition with source-quality awareness.",
+            summary="Collected support/opposition and market microstructure context from Gamma/Data API payloads.",
             sources=sources,
             supporting_points=supporting_points,
             opposing_points=opposing_points,
@@ -117,6 +125,12 @@ class SkepticAgent(AgentTool[SkepticAgentInput, SkepticOutput]):
             "Resolution-rule interpretation may still be wrong.",
             "The evidence set may be stale or insufficiently authoritative.",
         ]
+        if market.recent_trade_count >= 50 or market.attention_score >= 0.75:
+            counter_arguments.append(
+                "Recent Data API trade flow and attention are elevated, which raises crowd-efficiency risk."
+            )
+        if market.spread is not None and market.spread >= 0.05:
+            failure_modes.append("Wide spread may erase the apparent edge before execution.")
         if research.confidence < 0.6:
             failure_modes.append("Low research confidence increases false-positive risk.")
         confidence_penalty = 0.2 if market.attention_score < 0.5 else 0.35
@@ -135,12 +149,23 @@ class ProbabilityAgent(AgentTool[ProbabilityAgentInput, ProbabilityOutput]):
         research = payload.research_output
         rules = payload.rules_output
         skeptic = payload.skeptic_output
-        market_prob = market.last_price or market.best_ask or market.best_bid or 0.5
+        target_outcome = next(
+            (outcome for outcome in market.outcomes if outcome.outcome_id == payload.outcome_id),
+            None,
+        )
+        market_prob = (
+            target_outcome.price
+            if target_outcome is not None
+            else market.last_price or market.best_ask or market.best_bid or 0.5
+        )
         fair_prob = min(
             0.99,
             max(
                 0.01,
-                market_prob + (research.confidence * 0.18) - (skeptic.confidence_penalty * 0.08),
+                market_prob
+                + (research.confidence * 0.18)
+                - (skeptic.confidence_penalty * 0.08)
+                - min(0.03, market.attention_score * 0.02),
             ),
         )
         edge = fair_prob - market_prob

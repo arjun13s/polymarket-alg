@@ -13,7 +13,16 @@ class MarketRepository:
 
     def save(self, market: Market) -> None:
         with self._db.session() as session:
-            session.merge(MarketRecord(market_id=market.market_id, payload_json=market.model_dump_json()))
+            existing = session.query(MarketRecord).filter_by(market_id=market.market_id).one_or_none()
+            if existing is None:
+                session.add(
+                    MarketRecord(
+                        market_id=market.market_id,
+                        payload_json=market.model_dump_json(),
+                    )
+                )
+                return
+            existing.payload_json = market.model_dump_json()
 
     def get(self, market_id: str) -> Market | None:
         with self._db.session() as session:

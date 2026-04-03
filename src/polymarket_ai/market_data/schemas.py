@@ -17,6 +17,7 @@ class OutcomeQuote(BaseModel):
     name: str
     price: float = Field(ge=0.0, le=1.0)
     implied_probability: float = Field(ge=0.0, le=1.0)
+    token_id: str | None = None
 
 
 class MarketRules(BaseModel):
@@ -30,6 +31,9 @@ class NormalizedMarket(BaseModel):
     market_id: str
     question: str
     category: str
+    slug: str | None = None
+    condition_id: str | None = None
+    event_slug: str | None = None
     end_date: datetime | None = None
     status: MarketStatus
     liquidity: float = 0.0
@@ -41,6 +45,13 @@ class NormalizedMarket(BaseModel):
     best_bid: float | None = None
     best_ask: float | None = None
     last_price: float | None = None
+    spread: float | None = None
+    clob_token_ids: list[str] = Field(default_factory=list)
+    recent_trade_count: int = 0
+    recent_trade_volume: float = 0.0
+    recent_buy_volume: float = 0.0
+    recent_sell_volume: float = 0.0
+    last_activity_at: datetime | None = None
     attention_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
 

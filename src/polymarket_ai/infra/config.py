@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     hud_base_url: str | None = None
     hud_api_key: str | None = None
     hud_model: str | None = None
+    gamma_api_base_url: str = "https://gamma-api.polymarket.com"
+    data_api_base_url: str = "https://data-api.polymarket.com"
+    market_api_timeout_seconds: float = 10.0
+    market_data_trade_limit: int = 100
     config_path: str = "configs/base.yaml"
 
     def load_file_config(self) -> FileConfig:

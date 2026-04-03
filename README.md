@@ -68,6 +68,8 @@ The repository already has the backbone for this flow in `agent/`, `pricing/`, `
 
 The current code already routes model selection through `src/polymarket_ai/infra/providers.py` and `Settings.provider`. Set `POLYMARKET_AI_PROVIDER=hud` plus HUD credentials to make HUD the default provider path.
 
+Market ingest now prefers live Gamma + Data API reads before falling back to stored/demo data. Configure those endpoints with `POLYMARKET_AI_GAMMA_API_BASE_URL` and `POLYMARKET_AI_DATA_API_BASE_URL`; CLOB auth is intentionally not wired yet.
+
 The next HUD layer should expose the following tool boundaries as scenario-level wrappers:
 
 - `get_market_data`
@@ -107,7 +109,7 @@ Those tools should map cleanly onto the same service and repository boundaries u
 
 ### Phase 2: Live Market Ingestion
 
-- Wire official Polymarket Gamma/Data/CLOB adapters.
+- Keep Gamma as the primary metadata/rules adapter, Data API as trade-flow enrichment, and add CLOB public read endpoints later if spread/orderbook fidelity becomes necessary.
 - Add polling, snapshot retention, deduplication, and schema validation.
 - Introduce market filters for liquidity, stale quotes, and malformed rules.
 
@@ -135,7 +137,7 @@ Those tools should map cleanly onto the same service and repository boundaries u
 - Config via environment variables plus YAML overrides.
 - HUD-first model provider configuration with an OpenAI-compatible adapter seam.
 - Replaceable storage layer using SQLAlchemy and SQLite by default.
-- Adapter stubs for Gamma API, Data API, and CLOB ingestion.
+- Live Gamma API normalization and Data API trade enrichment, with CLOB trading/auth still intentionally excluded.
 - Research collector and synthesis split.
 - Agentic workflow with inspectable step logs and explicit target-outcome selection.
 - Pricing, ranking, portfolio, execution, and evaluation modules.
