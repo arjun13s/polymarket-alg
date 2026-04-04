@@ -24,13 +24,16 @@ class MarketRules(BaseModel):
     raw_rules: str
     parsed_resolution_criteria: list[str]
     source_url: HttpUrl | None = None
+    source_name: str | None = None
 
 
 class NormalizedMarket(BaseModel):
+    venue: str = "kalshi"
     event_id: str
     market_id: str
     question: str
     category: str
+    series_id: str | None = None
     slug: str | None = None
     condition_id: str | None = None
     event_slug: str | None = None

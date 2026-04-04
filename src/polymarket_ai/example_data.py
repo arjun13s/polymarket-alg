@@ -7,8 +7,8 @@ from polymarket_ai.market_data.schemas import MarketRules, MarketStatus, Normali
 
 def build_example_market() -> NormalizedMarket:
     return NormalizedMarket(
-        event_id="weather_2026",
-        market_id="atlantic_hurricanes_over_15_2026",
+        event_id="KXATLANTICSTORMS-26",
+        market_id="KXATLANTICSTORMS-26-N16",
         question="Will there be more than 15 named Atlantic storms in 2026?",
         category="weather",
         end_date=datetime(2026, 12, 1, tzinfo=timezone.utc),
@@ -19,8 +19,9 @@ def build_example_market() -> NormalizedMarket:
         description="Seasonal weather market for Atlantic storm count.",
         rules=MarketRules(
             raw_rules=(
-                "Resolves YES if the official NOAA or designated resolution source counts more than 15 "
-                "named Atlantic storms during the 2026 Atlantic hurricane season."
+                "Resolves YES if NOAA's final seasonal tally shows more than 15 named Atlantic storms "
+                "during the 2026 Atlantic hurricane season. Determined by NOAA advisories and the "
+                "post-season report."
             ),
             parsed_resolution_criteria=[
                 "Use the designated official storm count source only.",
@@ -46,5 +47,10 @@ def build_example_market() -> NormalizedMarket:
         best_bid=0.46,
         best_ask=0.48,
         last_price=0.47,
+        recent_trade_count=24,
+        recent_trade_volume=512.0,
+        recent_buy_volume=290.0,
+        recent_sell_volume=222.0,
+        last_activity_at=datetime(2026, 4, 1, 18, 30, tzinfo=timezone.utc),
         attention_score=0.25,
     )

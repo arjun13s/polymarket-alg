@@ -21,14 +21,14 @@ def test_example_pipeline_persists_and_serializes(tmp_path) -> None:
     container.market_data_service.sync_all()
     pipeline = PipelineService(container)
 
-    market_ctx = pipeline.load_market("atlantic_hurricanes_over_15_2026")
+    market_ctx = pipeline.load_market("KXATLANTICSTORMS-26-N16")
 
     assert market_ctx is not None
     run_id, memo = pipeline.analyze_market(market_ctx, outcome_id="yes")
     stake, trade = pipeline.paper_trade(run_id, market_ctx.market, memo)
     ranked = pipeline.rank_market(market_ctx.market, memo)
 
-    assert to_jsonable(memo)["market_id"] == "atlantic_hurricanes_over_15_2026"
+    assert to_jsonable(memo)["market_id"] == "KXATLANTICSTORMS-26-N16"
     assert stake.stake_dollars >= 0.0
     assert ranked.market_id == market_ctx.market.market_id
     assert trade is None or trade["market_id"] == market_ctx.market.market_id

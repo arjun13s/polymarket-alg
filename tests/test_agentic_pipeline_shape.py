@@ -41,7 +41,7 @@ def test_pipeline_emits_structured_decision_payload(tmp_path) -> None:
     container.market_data_service.sync_all()
     pipeline = PipelineService(container)
 
-    market_ctx = pipeline.load_market("atlantic_hurricanes_over_15_2026")
+    market_ctx = pipeline.load_market("KXATLANTICSTORMS-26-N16")
     assert market_ctx is not None
 
     run_id, memo = pipeline.analyze_market(market_ctx, outcome_id="yes")
@@ -51,7 +51,7 @@ def test_pipeline_emits_structured_decision_payload(tmp_path) -> None:
     payload = _build_final_decision_payload(market_ctx, memo, ranked, stake, trade)
     json_payload = to_jsonable(payload)
 
-    assert json_payload["market_id"] == "atlantic_hurricanes_over_15_2026"
+    assert json_payload["market_id"] == "KXATLANTICSTORMS-26-N16"
     assert json_payload["decision"] in {"NO_TRADE", "WATCHLIST", "PAPER_TRADE"}
     assert isinstance(json_payload["risks"], list)
     assert isinstance(json_payload["sources"], list)
@@ -66,7 +66,7 @@ def test_agentic_step_order_and_reasoning_are_present(tmp_path) -> None:
     container.market_data_service.sync_all()
     pipeline = PipelineService(container)
 
-    market_ctx = pipeline.load_market("atlantic_hurricanes_over_15_2026")
+    market_ctx = pipeline.load_market("KXATLANTICSTORMS-26-N16")
     assert market_ctx is not None
 
     _, memo = pipeline.analyze_market(market_ctx, outcome_id="yes")

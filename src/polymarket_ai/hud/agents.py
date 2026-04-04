@@ -57,14 +57,22 @@ class AgentTool(Generic[I, O]):
 
 class RulesAgent(AgentTool[RulesAgentInput, RuleAnalysis]):
     def run(self, payload: RulesAgentInput) -> RuleAnalysis:
-        parsed = payload.market.rules.parsed_resolution_criteria or [payload.market.rules.raw_rules]
+        parsed = [
+            rule.strip()
+            for rule in (payload.market.rules.parsed_resolution_criteria or [payload.market.rules.raw_rules])
+            if rule.strip()
+        ]
         risks: list[str] = []
         if not payload.market.rules.raw_rules.strip():
             risks.append("Missing raw rules text.")
         if not parsed:
             risks.append("No parsed rule criteria were found.")
-        if "official" not in payload.market.rules.raw_rules.lower():
-            risks.append("No explicit official resolution source found.")
+        if (
+            payload.market.rules.source_url is None
+            and payload.market.rules.source_name is None
+            and "determined by" not in payload.market.rules.raw_rules.lower()
+        ):
+            risks.append("No explicit settlement source reference found in Kalshi rules text.")
         clarity = 1.0 if parsed else 0.0
         return RuleAnalysis(
             market_id=payload.market.market_id,
@@ -80,30 +88,43 @@ class ResearchAgent(AgentTool[ResearchAgentInput, ResearchOutput]):
         market = payload.market
         rules = payload.rules_output
         sources = [
-            market.rules.source_url.unicode_string() if market.rules.source_url else "https://gamma-api.polymarket.com",
-            "https://data-api.polymarket.com/trades",
+            market.rules.source_url.unicode_string()
+            if market.rules.source_url
+            else market.rules.source_name
+            or f"https://api.elections.kalshi.com/trade-api/v2/markets/{market.market_id}",
+            f"https://api.elections.kalshi.com/trade-api/v2/markets/trades?ticker={market.market_id}",
         ]
         supporting_points = [
             f"Market liquidity is {market.liquidity:.2f} with 24h volume {market.volume_24h:.2f} in category {market.category}.",
-            f"Recent Data API flow shows {market.recent_trade_count} trades and {market.recent_trade_volume:.2f} units of matched activity.",
-            f"Rules are explicit enough to support a testable thesis in {market.market_id}.",
+            f"Recent Kalshi trade flow shows {market.recent_trade_count} trades and {market.recent_trade_volume:.2f} contracts of matched activity.",
         ]
-        opposing_points = [
-            "The same public evidence may already be priced into the market.",
-            "A narrow resolution interpretation could invalidate the thesis.",
-        ]
+        if rules.clarity_score >= 0.5:
+            supporting_points.append(
+                f"Rules are explicit enough to support a testable thesis in {market.market_id}."
+            )
+        else:
+            opposing_points = [
+                "The same public evidence may already be priced into the market.",
+                "A narrow resolution interpretation could invalidate the thesis.",
+                "Kalshi rules metadata is incomplete, which weakens the thesis quality.",
+            ]
+        if rules.clarity_score >= 0.5:
+            opposing_points = [
+                "The same public evidence may already be priced into the market.",
+                "A narrow resolution interpretation could invalidate the thesis.",
+            ]
         if market.last_activity_at is not None:
             supporting_points.append(
-                f"Latest market activity timestamp from Data API: {market.last_activity_at.isoformat()}."
+                f"Latest Kalshi market activity timestamp: {market.last_activity_at.isoformat()}."
             )
         risks = list(rules.risks) + [
             "Evidence quality remains sensitive to source freshness.",
-            f"Gamma/Data market snapshot may still lag if cache TTL is long; spread={market.spread}.",
+            f"Kalshi market snapshot may still lag if cache TTL is long; spread={market.spread}.",
         ]
         confidence = 0.72 if rules.clarity_score >= 0.5 else 0.45
         return ResearchOutput(
             market_id=market.market_id,
-            summary="Collected support/opposition and market microstructure context from Gamma/Data API payloads.",
+            summary="Collected support/opposition and market microstructure context from Kalshi markets/trades API payloads.",
             sources=sources,
             supporting_points=supporting_points,
             opposing_points=opposing_points,
@@ -127,7 +148,7 @@ class SkepticAgent(AgentTool[SkepticAgentInput, SkepticOutput]):
         ]
         if market.recent_trade_count >= 50 or market.attention_score >= 0.75:
             counter_arguments.append(
-                "Recent Data API trade flow and attention are elevated, which raises crowd-efficiency risk."
+                "Recent Kalshi trade flow and attention are elevated, which raises crowd-efficiency risk."
             )
         if market.spread is not None and market.spread >= 0.05:
             failure_modes.append("Wide spread may erase the apparent edge before execution.")

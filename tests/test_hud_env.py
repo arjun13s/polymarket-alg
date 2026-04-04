@@ -16,7 +16,7 @@ def test_prediction_market_env_registers_tools_and_scenarios() -> None:
 
 def test_full_pipeline_scenario_returns_structured_output() -> None:
     hud_app = create_hud_app()
-    result = hud_app.env.run_scenario("full_pipeline_scenario", market_id="atlantic_hurricanes_over_15_2026")
+    result = hud_app.env.run_scenario("full_pipeline_scenario", market_id="KXATLANTICSTORMS-26-N16")
     payload = result.model_dump(mode="json")
     assert payload["name"] == "full_pipeline_scenario"
     assert "decision" in payload["output"]

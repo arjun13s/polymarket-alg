@@ -99,7 +99,7 @@ class HudOpenAICompatibleProvider:
     ) -> ProbabilityAssessment:
         prompt = (
             "Return strict JSON with keys fair_probability, lower_bound, upper_bound, rationale. "
-            "You are estimating the probability for the target Polymarket outcome using the provided "
+            "You are estimating the probability for the target Kalshi outcome using the provided "
             "research packet. Penalize low-quality sources, stale evidence, ambiguous rules, and "
             "markets that may already be efficiently priced.\n\n"
             f"Target outcome: {outcome_id}\n"

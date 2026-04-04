@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from polymarket_ai.example_data import build_example_market
 from polymarket_ai.infra.config import Settings
 from polymarket_ai.infra.logging import configure_logging
-from polymarket_ai.market_data.adapters import DataApiAdapter, GammaApiAdapter
+from polymarket_ai.market_data.adapters import KalshiMarketsAdapter, KalshiTradesAdapter
 from polymarket_ai.models import Market
 from polymarket_ai.repositories import models as _repository_models  # noqa: F401
 from polymarket_ai.repositories.market_repo import MarketRepository
@@ -45,13 +45,13 @@ def build_hud_runtime(settings: Settings | None = None) -> HUDRuntime:
     market_service = MarketService(
         market_repo=market_repo,
         cache=TimedCache[Market](ttl_seconds=resolved_settings.cache_ttl_seconds),
-        lookup_adapter=GammaApiAdapter(
-            base_url=resolved_settings.gamma_api_base_url,
+        lookup_adapter=KalshiMarketsAdapter(
+            base_url=resolved_settings.kalshi_api_base_url,
             timeout_seconds=resolved_settings.market_api_timeout_seconds,
         ),
         enrichment_adapters=[
-            DataApiAdapter(
-                base_url=resolved_settings.data_api_base_url,
+            KalshiTradesAdapter(
+                base_url=resolved_settings.kalshi_trades_api_base_url,
                 timeout_seconds=resolved_settings.market_api_timeout_seconds,
                 default_limit=resolved_settings.market_data_trade_limit,
             )

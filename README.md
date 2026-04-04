@@ -1,4 +1,4 @@
-# Polymarket AI System
+# Kalshi Prediction Market AI System
 
 This version is scaffolded to be HUD-first at the provider layer while keeping the internal contracts generic enough to swap inference providers later.
 
@@ -6,7 +6,7 @@ This version is scaffolded to be HUD-first at the provider layer while keeping t
 
 This scaffold is organized around a strict pipeline:
 
-1. `market_data` ingests and normalizes Polymarket markets through replaceable adapters.
+1. `market_data` ingests and normalizes Kalshi markets through replaceable adapters.
 2. `research` collects source material, extracts claims, and synthesizes pro/con evidence into a typed packet.
 3. `agent` orchestrates a transparent workflow: planner, researcher, skeptic, rule check, probability estimate, final memo.
 4. `pricing` converts market prices to implied probabilities, estimates fair probability, applies fees/slippage, and blocks weak or uncertain trades.
@@ -68,7 +68,7 @@ The repository already has the backbone for this flow in `agent/`, `pricing/`, `
 
 The current code already routes model selection through `src/polymarket_ai/infra/providers.py` and `Settings.provider`. Set `POLYMARKET_AI_PROVIDER=hud` plus HUD credentials to make HUD the default provider path.
 
-Market ingest now prefers live Gamma + Data API reads before falling back to stored/demo data. Configure those endpoints with `POLYMARKET_AI_GAMMA_API_BASE_URL` and `POLYMARKET_AI_DATA_API_BASE_URL`; CLOB auth is intentionally not wired yet.
+Market ingest now prefers live Kalshi markets + trades reads before falling back to stored/demo data. Configure those endpoints with `POLYMARKET_AI_KALSHI_API_BASE_URL` and `POLYMARKET_AI_KALSHI_TRADES_API_BASE_URL`; authenticated trading is intentionally not wired yet.
 
 The next HUD layer should expose the following tool boundaries as scenario-level wrappers:
 
@@ -109,7 +109,7 @@ Those tools should map cleanly onto the same service and repository boundaries u
 
 ### Phase 2: Live Market Ingestion
 
-- Keep Gamma as the primary metadata/rules adapter, Data API as trade-flow enrichment, and add CLOB public read endpoints later if spread/orderbook fidelity becomes necessary.
+- Keep Kalshi `/markets` and `/markets/{ticker}` as the primary metadata/rules adapter, use `/markets/trades` for trade-flow enrichment, and add orderbook reads later if spread/depth fidelity becomes necessary.
 - Add polling, snapshot retention, deduplication, and schema validation.
 - Introduce market filters for liquidity, stale quotes, and malformed rules.
 
@@ -137,7 +137,7 @@ Those tools should map cleanly onto the same service and repository boundaries u
 - Config via environment variables plus YAML overrides.
 - HUD-first model provider configuration with an OpenAI-compatible adapter seam.
 - Replaceable storage layer using SQLAlchemy and SQLite by default.
-- Live Gamma API normalization and Data API trade enrichment, with CLOB trading/auth still intentionally excluded.
+- Live Kalshi market normalization and trade enrichment, with authenticated trading still intentionally excluded.
 - Research collector and synthesis split.
 - Agentic workflow with inspectable step logs and explicit target-outcome selection.
 - Pricing, ranking, portfolio, execution, and evaluation modules.
@@ -228,7 +228,7 @@ The biggest reasons systems like this fail:
 
 ## Next Implementation Steps
 
-1. Wire the real Polymarket public endpoints into `market_data.adapters`.
+1. Expand the Kalshi public endpoints in `market_data.adapters` to include orderbook depth and event-level metadata.
 2. Add archived snapshot readers and outcome resolvers for evaluation.
 3. Implement actual web search and source fetch abstractions.
 4. Add LLM-backed extraction and synthesis with schema-validated outputs.
@@ -267,7 +267,7 @@ Orchestrator -> RulesAgent -> ResearchAgent -> SkepticAgent -> ProbabilityAgent 
 ### How To Run
 
 ```bash
-python -m polymarket_ai.hud.cli analyze-market atlantic_hurricanes_over_15_2026
+python -m polymarket_ai.hud.cli analyze-market KXATLANTICSTORMS-26-N16
 python -m polymarket_ai.hud.cli run_tests
 python -m polymarket_ai.hud.cli run_eval_suite
 ```

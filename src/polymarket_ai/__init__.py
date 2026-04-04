@@ -1,4 +1,4 @@
-"""Polymarket AI system scaffold."""
+"""Kalshi-backed prediction-market AI system scaffold."""
 
 __all__ = ["__version__"]
 

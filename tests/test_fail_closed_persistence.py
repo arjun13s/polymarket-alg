@@ -18,7 +18,7 @@ def test_orchestrator_fails_closed_when_run_persistence_breaks(tmp_path: Path) -
 
     hud_app.runtime.run_repo.save = broken_save  # type: ignore[method-assign]
 
-    decision = hud_app.orchestrator.analyze_market("atlantic_hurricanes_over_15_2026")
+    decision = hud_app.orchestrator.analyze_market("KXATLANTICSTORMS-26-N16")
 
     assert decision.decision == DecisionKind.NO_TRADE
     assert "fallback" in decision.reasoning_summary.lower()
